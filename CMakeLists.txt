@@ -36,5 +36,5 @@ if (GRAPH_IO_PARALLEL)
 endif()
 target_compile_options(graph-io PRIVATE -std=c++17)
 
-add_executable(example example.cpp)
-target_link_libraries(example graph-io)
+add_executable(generator_example generator_example.cpp)
+target_link_libraries(generator_example graph-io)
