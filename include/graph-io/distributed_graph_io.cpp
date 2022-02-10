@@ -169,13 +169,9 @@ void read_metis_distributed(const std::string& input,
 void gather_PE_ranges(NodeId local_from,
                       NodeId local_to,
                       std::vector<std::pair<NodeId, NodeId>>& ranges,
-                      const MPI_Comm& comm,
-                      PEID rank,
-                      PEID size) {
-    (void)rank;
-    (void)size;
+                      const MPI_Comm& comm) {
     MPI_Datatype MPI_RANGE;
-    MPI_Type_vector(1, 2, 0, MPI_NODE, &MPI_RANGE);
+    MPI_Type_vector(1, 2, 0, GRAPH_IO_MPI_NODE, &MPI_RANGE);
     MPI_Type_commit(&MPI_RANGE);
     std::pair<NodeId, NodeId> local_range(local_from, local_to);
     MPI_Allgather(&local_range, 1, MPI_RANGE, ranges.data(), 1, MPI_RANGE, comm);
@@ -225,7 +221,7 @@ LocalGraphView read_local_metis_graph(const std::string& input, const GraphInfo&
     read_metis_distributed(input, graph_info, first_out, head, rank, size);
 
     std::vector<std::pair<NodeId, NodeId>> ranges(size);
-    gather_PE_ranges(graph_info.local_from, graph_info.local_to, ranges, MPI_COMM_WORLD, rank, size);
+    gather_PE_ranges(graph_info.local_from, graph_info.local_to, ranges, MPI_COMM_WORLD);
 
     std::vector<LocalGraphView::NodeInfo> node_info(first_out.size() - 1);
     for (size_t i = 0; i < first_out.size() - 1; ++i) {
@@ -270,9 +266,9 @@ LocalGraphView read_local_partitioned_edgelist(const std::string& input, PEID ra
     edges.erase(it, edges.end());
 
     NodeId total_node_count;
-    MPI_Allreduce(&local_node_count, &total_node_count, 1, MPI_NODE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&local_node_count, &total_node_count, 1, GRAPH_IO_MPI_NODE, MPI_SUM, MPI_COMM_WORLD);
 
-    gather_PE_ranges(local_from, local_to, ranges, MPI_COMM_WORLD, rank, size);
+    gather_PE_ranges(local_from, local_to, ranges, MPI_COMM_WORLD);
 
     fix_broken_edge_list(edges, ranges, ghosts, rank, size);
 
@@ -327,7 +323,7 @@ LocalGraphView read_local_binary_graph(const std::string& input, const GraphInfo
         head_file.read(head, to_read, first_index);
     }
     std::vector<std::pair<NodeId, NodeId>> ranges(size);
-    gather_PE_ranges(graph_info.local_from, graph_info.local_to, ranges, MPI_COMM_WORLD, rank, size);
+    gather_PE_ranges(graph_info.local_from, graph_info.local_to, ranges, MPI_COMM_WORLD);
 
     std::vector<LocalGraphView::NodeInfo> node_info(first_out.size() - 1);
     for (size_t i = 0; i < first_out.size() - 1; ++i) {

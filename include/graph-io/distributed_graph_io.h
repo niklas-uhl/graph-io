@@ -54,9 +54,7 @@ void read_metis_distributed(const std::string& input,
 void gather_PE_ranges(NodeId local_from,
                       NodeId local_to,
                       std::vector<std::pair<NodeId, NodeId>>& ranges,
-                      const MPI_Comm& comm,
-                      PEID rank,
-                      PEID size);
+                      const MPI_Comm& comm);
 
 PEID get_PE_from_node_ranges(NodeId node, const std::vector<std::pair<NodeId, NodeId>>& ranges);
 

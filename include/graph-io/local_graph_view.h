@@ -1,8 +1,13 @@
 #pragma once
+#include <mpi.h>
+#include <algorithm>
+#include <array>
 #include <cassert>
-#include <vector>
-#include <utility>
+#include <iterator>
 #include <unordered_map>
+#include <utility>
+#include <vector>
+#include "graph-io/definitions.h"
 #include "graph-io/graph_definitions.h"
 
 namespace graphio {
@@ -75,8 +80,55 @@ struct LocalGraphView {
             first_out[G.node_info.size()] = prefix_sum;
         }
     };
+
+    class NodeLocator {
+        friend LocalGraphView;
+    public:
+        bool is_local(NodeId node) {
+            return node >= local_range.first && node <= local_range.second;
+        }
+
+        PEID rank(NodeId node) {
+            if (is_local(node)) {
+                return rank_;
+            }
+            return rank_map[node];
+        }
+
+    private:
+        NodeLocator(const LocalGraphView& G, MPI_Comm comm) : local_range(), rank_map(), rank_() {
+            bool is_sorted = std::is_sorted(G.node_info.begin(), G.node_info.end(),
+                                            [](auto a, auto b) { return a.global_id < b.global_id; });
+            if (!is_sorted) {
+                throw "Node IDs must be globally sorted";
+            }
+            PEID rank, size;
+            MPI_Comm_rank(comm, &rank);
+            MPI_Comm_size(comm, &size);
+            std::vector<std::pair<NodeId, NodeId>> ranges(size);
+            local_range = {G.node_info.front().global_id, G.node_info.back().global_id};
+            MPI_Allgather(&local_range, 2, GRAPH_IO_MPI_NODE, ranges.data(), 2, GRAPH_IO_MPI_NODE, comm);
+            for (NodeId node : G.edge_heads) {
+                if (is_local(node)) {
+                    continue;
+                }
+                if (rank_map.find(node) == rank_map.end()) {
+                    auto it = std::lower_bound(
+                        ranges.begin(), ranges.end(), node,
+                        [](std::pair<NodeId, NodeId> range, NodeId node) { return range.second < node; });
+                    rank_map[node] = std::distance(ranges.begin(), it);
+                }
+            }
+        }
+        std::pair<NodeId, NodeId> local_range;
+        std::unordered_map<NodeId, PEID> rank_map;
+        PEID rank_;
+    };
     Indexer build_indexer() {
         return Indexer(*this);
+    }
+    NodeLocator build_locator(MPI_Comm comm) {
+        return NodeLocator(*this, comm);
     }
 };
 

@@ -2,20 +2,21 @@
 
 #include <cstdint>
 #include <ostream>
+#ifdef GRAPH_IO_PARALLEL
+#include <mpi.h>
+#ifdef MPI_UINT64_T
+#define GRAPH_IO_MPI_NODE MPI_UINT64_T
+#else
+static_assert(sizeof(unsigned long long) == 8, "We expect an unsigned long long to have 64 bit");
+#define GRAPH_IO_MPI_NODE MPI_UNSIGNED_LONG_LONG
+#endif
+#endif
 
 namespace graphio {
 
 using NodeId = std::uint64_t;
 using EdgeId = std::uint64_t;
 using Degree = NodeId;
-#ifdef MPI_VERSION
-#ifdef MPI_UNINT64_T
-#define MPI_NODE MPI_UINT64_T
-#else
-static_assert(sizeof(unsigned long long) == 8, "We expect an unsigned long long to have 64 bit");
-#define MPI_NODE MPI_UNSIGNED_LONG_LONG
-#endif
-#endif
 
 struct Edge {
     Edge() : tail(0), head(0) {}
