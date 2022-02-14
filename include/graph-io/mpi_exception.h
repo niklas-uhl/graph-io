@@ -12,6 +12,7 @@ struct MPIException : public std::exception {
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         std::stringstream out;
         out << "[R" << rank << "] " << msg;
+        msg_ = out.str();
     }
     const char* what() const throw() {
         return msg_.c_str();

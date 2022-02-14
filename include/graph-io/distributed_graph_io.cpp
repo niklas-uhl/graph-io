@@ -443,9 +443,9 @@ LocalGraphView gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID
         }
     }
     NodeId total_node_count;
-    MPI_Allreduce(&local_node_count, &total_node_count, 1, MPI_NODE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&local_node_count, &total_node_count, 1, GRAPH_IO_MPI_NODE, MPI_SUM, MPI_COMM_WORLD);
 
-    internal::gather_PE_ranges(local_from, local_to, ranges, MPI_COMM_WORLD, rank, size);
+    internal::gather_PE_ranges(local_from, local_to, ranges, MPI_COMM_WORLD);
 
     if (conf.rhg_fix) {
         internal::fix_broken_edge_list(edge_list, ranges, ghosts, rank, size);
