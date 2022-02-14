@@ -26,7 +26,7 @@ private:
             case AccessMode::ReadAndWrite:
                 return MPI_MODE_RDWR;
             case AccessMode::Create:
-                return MPI_MODE_RDWR;
+                return MPI_MODE_CREATE;
         }
         return 0;
     }
