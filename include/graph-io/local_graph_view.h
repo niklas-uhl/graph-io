@@ -4,6 +4,8 @@
 #include <array>
 #include <cassert>
 #include <iterator>
+#include <iostream>
+#include <sstream>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -85,7 +87,7 @@ struct LocalGraphView {
         friend LocalGraphView;
     public:
         bool is_local(NodeId node) {
-            return node >= local_range.first && node <= local_range.second;
+            return node >= local_range_.first && node <= local_range_.second;
         }
 
         PEID rank(NodeId node) {
@@ -95,8 +97,12 @@ struct LocalGraphView {
             return rank_map[node];
         }
 
+        std::pair<NodeId, NodeId> local_range() const {
+            return local_range_;
+        }
+
     private:
-        NodeLocator(const LocalGraphView& G, MPI_Comm comm) : local_range(), rank_map(), rank_() {
+        NodeLocator(const LocalGraphView& G, MPI_Comm comm) : local_range_(), rank_map(), rank_() {
             bool is_sorted = std::is_sorted(G.node_info.begin(), G.node_info.end(),
                                             [](auto a, auto b) { return a.global_id < b.global_id; });
             if (!is_sorted) {
@@ -104,10 +110,11 @@ struct LocalGraphView {
             }
             PEID rank, size;
             MPI_Comm_rank(comm, &rank);
+            rank_ = rank;
             MPI_Comm_size(comm, &size);
             std::vector<std::pair<NodeId, NodeId>> ranges(size);
-            local_range = {G.node_info.front().global_id, G.node_info.back().global_id};
-            MPI_Allgather(&local_range, 2, GRAPH_IO_MPI_NODE, ranges.data(), 2, GRAPH_IO_MPI_NODE, comm);
+            local_range_ = {G.node_info.front().global_id, G.node_info.back().global_id};
+            MPI_Allgather(&local_range_, 2, GRAPH_IO_MPI_NODE, ranges.data(), 2, GRAPH_IO_MPI_NODE, comm);
             for (NodeId node : G.edge_heads) {
                 if (is_local(node)) {
                     continue;
@@ -120,7 +127,7 @@ struct LocalGraphView {
                 }
             }
         }
-        std::pair<NodeId, NodeId> local_range;
+        std::pair<NodeId, NodeId> local_range_;
         std::unordered_map<NodeId, PEID> rank_map;
         PEID rank_;
     };
