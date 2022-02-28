@@ -86,15 +86,15 @@ struct LocalGraphView {
     class NodeLocator {
         friend LocalGraphView;
     public:
-        bool is_local(NodeId node) {
+        bool is_local(NodeId node) const {
             return node >= local_range_.first && node <= local_range_.second;
         }
 
-        PEID rank(NodeId node) {
+        PEID rank(NodeId node) const {
             if (is_local(node)) {
                 return rank_;
             }
-            return rank_map[node];
+            return rank_map.at(node);
         }
 
         std::pair<NodeId, NodeId> local_range() const {
