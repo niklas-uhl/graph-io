@@ -17,15 +17,15 @@ Graph read_graph(const std::string& input, InputFormat format) {
                 G.head_.reserve(edge_count);
             },
             [&](NodeId node) { G.first_out_.emplace_back(edge_count); },
-            [&](Edge edge) {
+            [&](Edge<> edge) {
                 G.head_.emplace_back(edge.head);
                 edge_count++;
             });
         G.first_out_.emplace_back(edge_count);
     } else if (format == InputFormat::edge_list) {
-        std::vector<Edge> edges;
+        std::vector<Edge<>> edges;
         NodeId max_node_id = 0;
-        internal::read_edge_list(input, [&](Edge edge) {
+        internal::read_edge_list(input, [&](Edge<> edge) {
             max_node_id = std::max(std::max(edge.head, edge.tail), max_node_id);
             edges.push_back(edge);
         });

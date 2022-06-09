@@ -39,7 +39,7 @@ void fix_broken_edge_list(EdgeList& edge_list,
     for (auto& edge : edge_list) {
         NodeId tail;
         NodeId head;
-        if constexpr (!std::is_same<EdgeList, std::vector<Edge>>::value) {
+        if constexpr (!std::is_same<EdgeList, std::vector<Edge<>>>::value) {
             tail = edge.first;
             head = edge.second;
         } else {
@@ -87,10 +87,10 @@ void fix_broken_edge_list(EdgeList& edge_list,
     recv_buf.clear();
     recv_buf.resize(0);
 
-    if constexpr (!std::is_same<EdgeList, std::vector<Edge>>::value) {
+    if constexpr (!std::is_same<EdgeList, std::vector<Edge<>>>::value) {
         std::sort(edge_list.begin(), edge_list.end());
     } else {
-        std::sort(edge_list.begin(), edge_list.end(), [&](const Edge& e1, const Edge& e2) {
+        std::sort(edge_list.begin(), edge_list.end(), [&](const Edge<>& e1, const Edge<>& e2) {
             return std::tie(e1.tail, e1.head) < std::tie(e2.tail, e2.head);
         });
     }
@@ -102,7 +102,7 @@ void fix_broken_edge_list(EdgeList& edge_list,
 
 void read_metis_distributed(const std::string& input,
                             const GraphInfo& graph_info,
-                            std::vector<Edge>& edge_list,
+                            std::vector<Edge<>>& edge_list,
                             node_set& ghosts,
                             PEID rank,
                             PEID size) {
@@ -122,7 +122,7 @@ void read_metis_distributed(const std::string& input,
         }
     };
 
-    auto on_edge = [&](Edge edge) {
+    auto on_edge = [&](Edge<> edge) {
         if (!skip) {
             if (edge.head < graph_info.local_from || edge.head >= graph_info.local_to) {
                 ghosts.insert(edge.head);
@@ -156,7 +156,7 @@ void read_metis_distributed(const std::string& input,
         }
     };
 
-    auto on_edge = [&](Edge edge) {
+    auto on_edge = [&](Edge<> edge) {
         if (!skip) {
             head.emplace_back(edge.head);
         }
@@ -236,7 +236,7 @@ LocalGraphView read_local_metis_graph(const std::string& input, const GraphInfo&
 LocalGraphView read_local_partitioned_edgelist(const std::string& input, PEID rank, PEID size) {
     node_set ghosts;
     // ghosts.set_empty_key(-1);
-    std::vector<Edge> edges;
+    std::vector<Edge<>> edges;
     std::vector<std::pair<NodeId, NodeId>> ranges(size);
 
     auto input_path = std::filesystem::path(input + "_" + std::to_string(rank));
@@ -245,7 +245,7 @@ LocalGraphView read_local_partitioned_edgelist(const std::string& input, PEID ra
     NodeId local_to = std::numeric_limits<NodeId>::min();
     internal::read_edge_list(
         input_path.string(),
-        [&](Edge e) {
+        [&](Edge<> e) {
             if (e.tail > local_to) {
                 local_to = e.tail;
             }
@@ -260,7 +260,7 @@ LocalGraphView read_local_partitioned_edgelist(const std::string& input, PEID ra
     NodeId local_node_count = local_to - local_from;
 
     std::sort(edges.begin(), edges.end(),
-              [&](const Edge& e1, const Edge& e2) { return std::tie(e1.tail, e1.head) < std::tie(e2.tail, e2.head); });
+              [&](const Edge<>& e1, const Edge<>& e2) { return std::tie(e1.tail, e1.head) < std::tie(e2.tail, e2.head); });
 
     // kagen sometimes produces duplicate edges
     auto it = std::unique(edges.begin(), edges.end());
@@ -281,7 +281,7 @@ LocalGraphView read_local_partitioned_edgelist(const std::string& input, PEID ra
         NodeId tail = edge.tail;
         NodeId head = edge.head;
         if (tail >= local_from && tail < local_to) {
-            Edge e{tail, head};
+            Edge<> e{tail, head};
             if (current_node != e.tail) {
                 if (current_node != std::numeric_limits<NodeId>::max()) {
                     node_info.emplace_back(current_node, degree_counter);
@@ -463,7 +463,7 @@ LocalGraphView gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID
         NodeId tail = edge.first;
         NodeId head = edge.second;
         if (tail >= local_from && tail < local_to) {
-            Edge e{tail, head};
+            Edge<> e{tail, head};
             if (current_node != e.tail) {
                 if (current_node != std::numeric_limits<NodeId>::max()) {
                     node_info.emplace_back(current_node, degree_counter);

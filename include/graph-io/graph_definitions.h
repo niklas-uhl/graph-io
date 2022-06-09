@@ -18,9 +18,10 @@ using NodeId = std::uint64_t;
 using EdgeId = std::uint64_t;
 using Degree = NodeId;
 
+template <typename NodeIdType = NodeId>
 struct Edge {
-    Edge() : tail(0), head(0) {}
-    Edge(NodeId tail, NodeId head) : tail(tail), head(head) {}
+    Edge() : tail(), head() {}
+    Edge(NodeIdType tail, NodeIdType head) : tail(tail), head(head) {}
     Edge reverse() const {
         return Edge{head, tail};
     }
@@ -29,16 +30,18 @@ struct Edge {
         return Edge{map(tail), map(head)};
     }
 
-    NodeId tail;
-    NodeId head;
+    NodeIdType tail;
+    NodeIdType head;
 };
 
-inline std::ostream& operator<<(std::ostream& out, const Edge& edge) {
+template <typename NodeIdType>
+inline std::ostream& operator<<(std::ostream& out, const Edge<NodeIdType>& edge) {
     out << "(" << edge.tail << ", " << edge.head << ")";
     return out;
 }
 
-inline bool operator==(const Edge& x, const Edge& y) {
+template <typename NodeIdType>
+inline bool operator==(const Edge<NodeIdType>& x, const Edge<NodeIdType>& y) {
     return x.tail == y.tail && x.head == y.head;
 }
 

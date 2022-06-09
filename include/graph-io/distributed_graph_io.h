@@ -39,7 +39,7 @@ struct GraphInfo {
 
 void read_metis_distributed(const std::string& input,
                             const GraphInfo& graph_info,
-                            std::vector<Edge>& edge_list,
+                            std::vector<Edge<>>& edge_list,
                             node_set& ghosts,
                             PEID rank,
                             PEID size);
