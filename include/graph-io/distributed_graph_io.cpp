@@ -12,9 +12,9 @@
 #include <unordered_set>
 #include <utility>
 #include "graph-io/graph_definitions.h"
-#include "graph-io/parsing.h"
 #include "graph-io/local_graph_view.h"
 #include "graph-io/mpi_io_wrapper.h"
+#include "graph-io/parsing.h"
 #ifdef GRAPH_IO_USE_KAGEN
 #pragma push_macro("PTR")
 #undef PTR
@@ -176,6 +176,8 @@ void gather_PE_ranges(NodeId local_from,
     std::pair<NodeId, NodeId> local_range(local_from, local_to);
     MPI_Allgather(&local_range, 1, MPI_RANGE, ranges.data(), 1, MPI_RANGE, comm);
 #ifdef CHECK_RANGES
+    int rank;
+    MPI_Comm_rank(comm, &rank);
     if (rank == 0) {
         NodeId next_expected = 0;
         for (size_t i = 0; i < ranges.size(); ++i) {
@@ -189,11 +191,15 @@ void gather_PE_ranges(NodeId local_from,
             }
             if (range.first > next_expected) {
                 throw std::runtime_error("[R" + std::to_string(i) + "] range [" + std::to_string(range.first) + ", " +
-                                         std::to_string(range.second) + "] has a gap to previous one");
+                                         std::to_string(range.second) + "] has a gap to previous one: [" +
+                                         std::to_string(ranges[i - 1].first) + ", " +
+                                         std::to_string(ranges[i - 1].second) + "]");
             }
             if (range.first < next_expected) {
                 throw std::runtime_error("[R" + std::to_string(i) + "] range [" + std::to_string(range.first) + ", " +
-                                         std::to_string(range.second) + "] overlaps with previous one");
+                                         std::to_string(range.second) + "] overlaps with previous one: [" +
+                                         std::to_string(ranges[i - 1].first) + ", " +
+                                         std::to_string(ranges[i - 1].second) + "]");
             }
             next_expected = range.second;
         }
@@ -259,8 +265,9 @@ LocalGraphView read_local_partitioned_edgelist(const std::string& input, PEID ra
 
     NodeId local_node_count = local_to - local_from;
 
-    std::sort(edges.begin(), edges.end(),
-              [&](const Edge<>& e1, const Edge<>& e2) { return std::tie(e1.tail, e1.head) < std::tie(e2.tail, e2.head); });
+    std::sort(edges.begin(), edges.end(), [&](const Edge<>& e1, const Edge<>& e2) {
+        return std::tie(e1.tail, e1.head) < std::tie(e2.tail, e2.head);
+    });
 
     // kagen sometimes produces duplicate edges
     auto it = std::unique(edges.begin(), edges.end());
