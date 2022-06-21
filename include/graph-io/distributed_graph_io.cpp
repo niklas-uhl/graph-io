@@ -1,6 +1,7 @@
 #include "graph-io/distributed_graph_io.h"
 #include <mpi.h>
 #include <unistd.h>
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -18,7 +19,7 @@
 #ifdef GRAPH_IO_USE_KAGEN
 #pragma push_macro("PTR")
 #undef PTR
-#include "kagen_interface.h"
+#include "kagen_library.h"
 #pragma pop_macro("PTR")
 #include "graph-io/mpi_io_wrapper.h"
 #endif
@@ -399,64 +400,59 @@ LocalGraphView gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID
     if (conf.scale_weak) {
         conf.r /= sqrt(size);
     }
-    kagen::EdgeList edge_list;
-    internal::node_set ghosts;
-    // ghosts.set_empty_key(-1);
-    std::vector<std::pair<NodeId, NodeId>> ranges(size);
+    kagen::VertexRange vertex_range;
 
-    kagen::KaGen gen(rank, size);
     kagen::SInt n = static_cast<kagen::SInt>(1) << conf.n;
     kagen::SInt m = static_cast<kagen::SInt>(1) << conf.m;
+
+    kagen::KaGen gen(MPI_COMM_WORLD);
+    gen.EnableUndirectedGraphVerification();
+    gen.SetSeed(conf.seed);
+    kagen::EdgeList edge_list;
     if (conf.generator == "gnm_undirected") {
-        if (m * 2 > (n * n) / 2) {
-            throw std::runtime_error("m is to high");
-        }
-        edge_list = gen.GenerateUndirectedGNM(n, m, conf.k, conf.seed);
+        auto [edge_list_, vertex_range_] = gen.GenerateUndirectedGNM(n, m, false);
+        edge_list = std::move(edge_list_);
+        vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rdg_2d") {
-        edge_list = gen.Generate2DRDG(n, conf.k, conf.seed);
+        auto [edge_list_, vertex_range_] = gen.GenerateRDG2D(n, false);
+        edge_list_ = std::move(edge_list_);
+        vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rdg_3d") {
-        edge_list = gen.Generate3DRDG(n, conf.k, conf.seed);
+        auto [edge_list_, vertex_range_] = gen.GenerateRDG3D(n);
+        edge_list_ = std::move(edge_list_);
+        vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rgg_2d") {
-        edge_list = gen.Generate2DRGG(n, conf.r, conf.k, conf.seed);
+        auto [edge_list_, vertex_range_] = gen.GenerateRGG2D(n, conf.r);
+        edge_list_ = std::move(edge_list_);
+        vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rgg_3d") {
-        edge_list = gen.Generate3DRGG(n, conf.r, conf.k, conf.seed);
+        auto [edge_list_, vertex_range_] = gen.GenerateRGG3D(n, conf.r);
+        edge_list_ = std::move(edge_list_);
+        vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rhg") {
-        edge_list = gen.GenerateRHG(n, conf.gamma, conf.d, conf.k, conf.seed);
+        auto [edge_list_, vertex_range_] = gen.GenerateRHG(conf.gamma, n, conf.d);
+        edge_list_ = std::move(edge_list_);
+        vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "ba") {
-        edge_list = gen.GenerateBA(n, conf.d, conf.k, conf.seed);
+        auto [edge_list_, vertex_range_] = gen.GenerateBA(n, conf.d);
+        edge_list_ = std::move(edge_list_);
+        vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "grid_2d") {
-        edge_list = gen.Generate2DGrid(n, m, conf.p, conf.periodic, conf.k, conf.seed);
+        auto [edge_list_, vertex_range_] = gen.GenerateGrid2D_N(n, conf.p);
+        edge_list_ = std::move(edge_list_);
+        vertex_range = std::move(vertex_range_);
     } else {
         throw std::runtime_error("Generator not supported");
     }
-    NodeId local_from = edge_list[0].first;
-    NodeId local_to = edge_list[0].second + 1;
+    NodeId local_from = vertex_range.first;
+    NodeId local_to = vertex_range.second;
     NodeId local_node_count = local_to - local_from;
-    edge_list.erase(edge_list.begin());
 
-    std::sort(edge_list.begin(), edge_list.end());
-
-    // kagen sometimes produces duplicate edges
-    auto it = std::unique(edge_list.begin(), edge_list.end());
-    edge_list.erase(it, edge_list.end());
-
-    for (auto& edge : edge_list) {
-        NodeId tail = edge.first;
-        NodeId head = edge.second;
-        // atomic_debug(std::to_string(tail) + " " + std::to_string(head));
-        if (tail >= local_from && tail < local_to) {
-            if (head < local_from || head >= local_to) {
-                ghosts.insert(head);
-            }
-        }
-    }
-    NodeId total_node_count;
-    MPI_Allreduce(&local_node_count, &total_node_count, 1, GRAPH_IO_MPI_NODE, MPI_SUM, MPI_COMM_WORLD);
-
-    internal::gather_PE_ranges(local_from, local_to, ranges, MPI_COMM_WORLD);
-
-    if (conf.rhg_fix) {
-        internal::fix_broken_edge_list(edge_list, ranges, ghosts, rank, size);
+    auto sort_by_tail = [](auto const& e1, auto const& e2) {
+        return std::get<0>(e1) < std::get<0>(e2);
+    };
+    if (!std::is_sorted(edge_list.begin(), edge_list.end(), sort_by_tail)) {
+        std::sort(edge_list.begin(), edge_list.end(), sort_by_tail);
     }
 
     if (edge_list.empty()) {
@@ -466,9 +462,9 @@ LocalGraphView gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID
     Degree degree_counter = 0;
     std::vector<LocalGraphView::NodeInfo> node_info;
     std::vector<NodeId> edge_heads;
-    for (auto& edge : edge_list) {
-        NodeId tail = edge.first;
-        NodeId head = edge.second;
+    for (auto const& edge : edge_list) {
+        NodeId tail = std::get<0>(edge);
+        NodeId head = std::get<1>(edge);
         if (tail >= local_from && tail < local_to) {
             Edge<> e{tail, head};
             if (current_node != e.tail) {
