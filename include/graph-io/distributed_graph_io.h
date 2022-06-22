@@ -60,9 +60,7 @@ PEID get_PE_from_node_ranges(NodeId node, const std::vector<std::pair<NodeId, No
 
 LocalGraphView read_local_metis_graph(const std::string& input, const GraphInfo& graph_info, PEID rank, PEID size);
 
-LocalGraphView read_local_partitioned_edgelist(const std::string& input,
-                                               PEID rank,
-                                               PEID size);
+LocalGraphView read_local_partitioned_edgelist(const std::string& input, PEID rank, PEID size);
 
 std::pair<NodeId, NodeId> get_node_range(const std::string& input, PEID rank, PEID size);
 
@@ -71,15 +69,20 @@ LocalGraphView read_local_binary_graph(const std::string& input, const GraphInfo
 void read_graph_info_from_binary(const std::string& input, NodeId& node_count, EdgeId& edge_count);
 }  // namespace internal
 
+struct IOResult {
+    LocalGraphView G;
+    internal::GraphInfo info;
+};
+
 #ifdef GRAPH_IO_USE_KAGEN
-LocalGraphView gen_local_graph(const GeneratorParameters& conf, PEID rank, PEID size);
+IOResult gen_local_graph(const GeneratorParameters& conf, PEID rank, PEID size);
 #endif
 
-LocalGraphView read_local_graph(const std::string& input, InputFormat format, PEID rank, PEID size);
+IOResult read_local_graph(const std::string& input, InputFormat format, PEID rank, PEID size);
 
 void write_graph_view(const LocalGraphView& G, const std::string& output, PEID rank, PEID size);
 
-LocalGraphView read_graph_view(const std::string& input, PEID rank, PEID size);
+IOResult read_graph_view(const std::string& input, PEID rank, PEID size);
 
 std::string dump_to_tmp(const LocalGraphView& G, PEID rank, PEID size);  // namespace cetric
 }  // namespace graphio

@@ -237,7 +237,6 @@ LocalGraphView read_local_metis_graph(const std::string& input, const GraphInfo&
         node_info[i].degree = first_out[i + 1] - first_out[i];
     }
     return LocalGraphView{std::move(node_info), std::move(head)};
-    ;
 }
 
 LocalGraphView read_local_partitioned_edgelist(const std::string& input, PEID rank, PEID size) {
@@ -393,7 +392,7 @@ std::pair<NodeId, NodeId> get_node_range(const std::string& input, PEID rank, PE
 }  // namespace internal
 
 #ifdef GRAPH_IO_USE_KAGEN
-LocalGraphView gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID size) {
+IOResult gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID size) {
     GeneratorParameters conf = conf_;
     NodeId n_pow_2 = 1 << conf.n;
     conf.r = conf.r_coeff * sqrt(std::log(n_pow_2) / n_pow_2);
@@ -407,6 +406,7 @@ LocalGraphView gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID
 
     kagen::KaGen gen(MPI_COMM_WORLD);
     gen.EnableUndirectedGraphVerification();
+    gen.EnableBasicStatistics();
     gen.SetSeed(conf.seed);
     kagen::EdgeList edge_list;
     if (conf.generator == "gnm_undirected") {
@@ -415,31 +415,31 @@ LocalGraphView gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID
         vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rdg_2d") {
         auto [edge_list_, vertex_range_] = gen.GenerateRDG2D(n, false);
-        edge_list_ = std::move(edge_list_);
+        edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rdg_3d") {
         auto [edge_list_, vertex_range_] = gen.GenerateRDG3D(n);
-        edge_list_ = std::move(edge_list_);
+        edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rgg_2d") {
         auto [edge_list_, vertex_range_] = gen.GenerateRGG2D(n, conf.r);
-        edge_list_ = std::move(edge_list_);
+        edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rgg_3d") {
         auto [edge_list_, vertex_range_] = gen.GenerateRGG3D(n, conf.r);
-        edge_list_ = std::move(edge_list_);
+        edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rhg") {
         auto [edge_list_, vertex_range_] = gen.GenerateRHG(conf.gamma, n, conf.d);
-        edge_list_ = std::move(edge_list_);
+        edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "ba") {
         auto [edge_list_, vertex_range_] = gen.GenerateBA(n, conf.d);
-        edge_list_ = std::move(edge_list_);
+        edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "grid_2d") {
         auto [edge_list_, vertex_range_] = gen.GenerateGrid2D_N(n, conf.p);
-        edge_list_ = std::move(edge_list_);
+        edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else {
         throw std::runtime_error("Generator not supported");
@@ -456,35 +456,41 @@ LocalGraphView gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID
     }
 
     if (edge_list.empty()) {
-        return LocalGraphView();
+        internal::GraphInfo info;
+        info.local_from = local_from;
+        info.local_to = local_to;
+        return {LocalGraphView(), info};
     }
     NodeId current_node = std::numeric_limits<NodeId>::max();
     Degree degree_counter = 0;
+    NodeId node_counter = local_from;
     std::vector<LocalGraphView::NodeInfo> node_info;
     std::vector<NodeId> edge_heads;
     for (auto const& edge : edge_list) {
         NodeId tail = std::get<0>(edge);
         NodeId head = std::get<1>(edge);
-        if (tail >= local_from && tail < local_to) {
-            Edge<> e{tail, head};
-            if (current_node != e.tail) {
-                if (current_node != std::numeric_limits<NodeId>::max()) {
-                    node_info.emplace_back(current_node, degree_counter);
-                }
-                degree_counter = 0;
-                current_node = e.tail;
+        assert(tail >= local_from && tail < local_to);
+        Edge<> e{tail, head};
+        if (current_node != e.tail) {
+            if (current_node != std::numeric_limits<NodeId>::max()) {
+                node_info.emplace_back(current_node, degree_counter);
             }
-            edge_heads.emplace_back(e.head);
-            degree_counter++;
+            degree_counter = 0;
+            current_node = e.tail;
         }
+        edge_heads.emplace_back(e.head);
+        degree_counter++;
     }
     node_info.emplace_back(current_node, degree_counter);
 
-    return LocalGraphView{std::move(node_info), std::move(edge_heads)};
+    internal::GraphInfo info;
+    info.local_from = local_from;
+    info.local_to = local_to;
+    return {LocalGraphView{std::move(node_info), std::move(edge_heads)}, info};
 }
 #endif
 
-LocalGraphView read_local_graph(const std::string& input, InputFormat format, PEID rank, PEID size) {
+IOResult read_local_graph(const std::string& input, InputFormat format, PEID rank, PEID size) {
     NodeId total_node_count;
     EdgeId total_edge_count;
     if (format == InputFormat::metis) {
@@ -499,9 +505,9 @@ LocalGraphView read_local_graph(const std::string& input, InputFormat format, PE
 
     // atomic_debug("[" + std::to_string(graph_info.local_from) + ", " + std::to_string(graph_info.local_to) + ")");
     if (format == InputFormat::metis) {
-        return read_local_metis_graph(input, graph_info, rank, size);
+        return {read_local_metis_graph(input, graph_info, rank, size), graph_info};
     } else if (format == InputFormat::binary) {
-        return read_local_binary_graph(input, graph_info, rank, size);
+        return {read_local_binary_graph(input, graph_info, rank, size), graph_info};
     } else {
         throw std::runtime_error("This should not happen.");
     }
@@ -527,7 +533,7 @@ void write_graph_view(const LocalGraphView& G, const std::string& output, PEID r
     out_file.write_collective(G.edge_heads, offset);
 }
 
-LocalGraphView read_graph_view(const std::string& input, PEID rank, PEID size) {
+IOResult read_graph_view(const std::string& input, PEID rank, PEID size) {
     ConcurrentFile in_file(input, ConcurrentFile::AccessMode::ReadOnly, MPI_COMM_WORLD);
     std::vector<std::pair<size_t, size_t>> local_sizes;
     in_file.read_collective(local_sizes, size);
@@ -541,7 +547,15 @@ LocalGraphView read_graph_view(const std::string& input, PEID rank, PEID size) {
     in_file.read_collective(G.node_info, local_size.first, offset);
     offset += local_size.first * sizeof(LocalGraphView::NodeInfo);
     in_file.read_collective(G.edge_heads, local_size.second, offset);
-    return G;
+    internal::GraphInfo info;
+    if (G.local_node_count() > 0) {
+        info.local_from = G.node_info.front().global_id;
+        info.local_to = G.node_info.back().global_id + 1;
+    } else {
+        info.local_from = std::numeric_limits<NodeId>::max();
+        info.local_to = std::numeric_limits<NodeId>::max();
+    }
+    return {std::move(G), std::move(info)};
 }
 
 std::string dump_to_tmp(const LocalGraphView& G, PEID rank, PEID size) {
