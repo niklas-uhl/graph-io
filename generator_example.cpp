@@ -12,7 +12,8 @@ int main(int argc, char* argv[]) {
     params.generator = "rgg_2d";
     params.r_coeff = 0.55;
     params.n = 10;
-    auto G = graphio::gen_local_graph(params, rank, size);
+    auto result = graphio::gen_local_graph(params, rank, size);
+    auto G = std::move(result.G);
     std::cout << "n=" << G.local_node_count() << std::endl;
     std::cout << "m=" << G.edge_heads.size() << std::endl;
 
