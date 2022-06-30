@@ -394,19 +394,18 @@ std::pair<NodeId, NodeId> get_node_range(const std::string& input, PEID rank, PE
 #ifdef GRAPH_IO_USE_KAGEN
 IOResult gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID size) {
     GeneratorParameters conf = conf_;
-    NodeId n_pow_2 = 1 << conf.n;
-    conf.r = conf.r_coeff * sqrt(std::log(n_pow_2) / n_pow_2);
-    if (conf.scale_weak) {
-        conf.r /= sqrt(size);
-    }
     kagen::VertexRange vertex_range;
 
     kagen::SInt n = static_cast<kagen::SInt>(1) << conf.n;
     kagen::SInt m = static_cast<kagen::SInt>(1) << conf.m;
 
     kagen::KaGen gen(MPI_COMM_WORLD);
-    gen.EnableUndirectedGraphVerification();
-    gen.EnableBasicStatistics();
+    if (conf.verify_graph) {
+        gen.EnableUndirectedGraphVerification();
+    }
+    if (conf.statistics) {
+        gen.EnableBasicStatistics();
+    }
     gen.SetSeed(conf.seed);
     kagen::EdgeList edge_list;
     if (conf.generator == "gnm_undirected") {
@@ -422,15 +421,15 @@ IOResult gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID size)
         edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rgg_2d") {
-        auto [edge_list_, vertex_range_] = gen.GenerateRGG2D(n, conf.r);
+        auto [edge_list_, vertex_range_] = gen.GenerateRGG2D_NM(n, m);
         edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rgg_3d") {
-        auto [edge_list_, vertex_range_] = gen.GenerateRGG3D(n, conf.r);
+        auto [edge_list_, vertex_range_] = gen.GenerateRGG3D_NM(n, m);
         edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rhg") {
-        auto [edge_list_, vertex_range_] = gen.GenerateRHG(conf.gamma, n, conf.d);
+        auto [edge_list_, vertex_range_] = gen.GenerateRHG_NM(conf.gamma, n, m);
         edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "ba") {

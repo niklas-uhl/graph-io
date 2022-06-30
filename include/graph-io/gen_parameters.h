@@ -1,8 +1,8 @@
 #pragma once
 
-#include "graph-io/graph_definitions.h"
 #include <map>
 #include <string>
+#include "graph-io/graph_definitions.h"
 
 namespace graphio {
 
@@ -19,7 +19,7 @@ struct GeneratorParameters {
     size_t k = 0;
     float gamma = 2.8;
     float d = 16;
-    bool scale_weak = false;
-    bool rhg_fix = false;
+    bool verify_graph = false;
+    bool statistics = false;
 };
 }  // namespace graphio
