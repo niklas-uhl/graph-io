@@ -19,6 +19,9 @@ struct GeneratorParameters {
     size_t k = 0;
     float gamma = 2.8;
     float d = 16;
+    double a = 0.57;
+    double b = 0.19;
+    double c = 0.19;
     bool verify_graph = false;
     bool statistics = false;
 };

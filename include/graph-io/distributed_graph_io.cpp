@@ -440,6 +440,10 @@ IOResult gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID size)
         auto [edge_list_, vertex_range_] = gen.GenerateGrid2D_N(n, conf.p);
         edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
+    } else if (conf.generator == "rmat") {
+      auto [edge_list_, vertex_range_] = gen.GenerateRMAT(n, m, conf.a, conf.b, conf.c);
+        edge_list = std::move(edge_list_);
+        vertex_range = std::move(vertex_range_);
     } else {
         throw std::runtime_error("Generator not supported");
     }
