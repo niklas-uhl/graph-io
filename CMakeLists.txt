@@ -21,6 +21,7 @@ endif()
 #add_library(graph-io include/graph-io/distributed_graph_io.cpp include/graph-io/graph_io.cpp)
 set (FILE_LIST
   "include/graph-io/graph_io.cpp"
+  "include/graph-io/local_graph_view.cpp"
   )
 if (GRAPH_IO_PARALLEL)
   list(APPEND FILE_LIST "include/graph-io/distributed_graph_io.cpp")

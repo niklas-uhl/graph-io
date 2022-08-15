@@ -1,6 +1,7 @@
 #pragma once
 #include <mpi.h>
 #include <algorithm>
+#include <numeric>
 #include <array>
 #include <cassert>
 #include <iterator>
@@ -11,6 +12,40 @@
 #include <vector>
 #include "graph-io/definitions.h"
 #include "graph-io/graph_definitions.h"
+
+template<typename Range>
+inline void print_range(Range const& range, std::ostream& out = std::cout) {
+    out << "[";
+    for (auto current = range.begin(); current != range.end(); current++) {
+        if (current != range.begin()) {
+            out << ", ";
+        }
+        out << *current;
+    }
+    out << "]" << std::endl;
+}
+
+#define NUHL_PRINT(val)                       \
+    {                                         \
+        int rank;                             \
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank); \
+        std::stringstream out;                \
+        out << "[R" << rank << "] ";          \
+        out << #val << ": ";                  \
+        out << val << std::endl;              \
+        std::cout << out.str();               \
+    }
+
+#define NUHL_PRINTR(range)                    \
+    {                                         \
+        int rank;                             \
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank); \
+        std::stringstream out;                \
+        out << "[R" << rank << "] ";          \
+        out << #range << ": ";                \
+        print_range(range, out);              \
+        std::cout << out.str();               \
+    }
 
 namespace graphio {
 
@@ -131,10 +166,10 @@ struct LocalGraphView {
         std::unordered_map<NodeId, PEID> rank_map;
         PEID rank_;
     };
-    Indexer build_indexer() {
+    Indexer build_indexer() const {
         return Indexer(*this);
     }
-    NodeLocator build_locator(MPI_Comm comm) {
+    NodeLocator build_locator(MPI_Comm comm) const {
         return NodeLocator(*this, comm);
     }
 };
@@ -142,4 +177,10 @@ struct LocalGraphView {
 inline bool operator==(const LocalGraphView::NodeInfo& lhs, const LocalGraphView::NodeInfo& rhs) {
     return lhs.global_id == rhs.global_id && lhs.degree == rhs.degree;
 }
-}  // namespace graphio
+
+LocalGraphView apply_partition(LocalGraphView&& G, std::vector<size_t> const& partition, MPI_Comm comm);
+
+void relabel_consecutively(LocalGraphView& G, MPI_Comm comm);
+
+std::string as_dot(LocalGraphView const& G, MPI_Comm comm);
+}

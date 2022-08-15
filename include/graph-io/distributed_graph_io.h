@@ -74,6 +74,8 @@ struct IOResult {
     internal::GraphInfo info;
 };
 
+std::vector<size_t> read_local_partition(const std::string& input, NodeId from, NodeId to, PEID rank, PEID size);
+
 #ifdef GRAPH_IO_USE_KAGEN
 IOResult gen_local_graph(const GeneratorParameters& conf, PEID rank, PEID size);
 #endif

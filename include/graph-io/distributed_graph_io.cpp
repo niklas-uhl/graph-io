@@ -391,6 +391,39 @@ std::pair<NodeId, NodeId> get_node_range(const std::string& input, PEID rank, PE
 }
 }  // namespace internal
 
+std::vector<size_t> read_local_partition(const std::string& input, NodeId from, NodeId to, PEID rank, PEID size) {
+    std::string partition_string;
+    {
+        ConcurrentFile partition_file(input, ConcurrentFile::AccessMode::ReadOnly, MPI_COMM_WORLD);
+        std::vector<char> data;
+        partition_file.read(data, partition_file.size() / sizeof(char));
+        partition_string = std::string(data.begin(), data.end());
+    }
+    std::stringstream sstream(partition_string);
+    std::string line;
+    size_t line_index = 0;
+    std::vector<size_t> partitioning;
+    partitioning.reserve(to - from);
+    while (std::getline(sstream, line, '\n')) {
+        if (line_index < from) {
+            line_index++;
+            continue;
+        }
+        if (line_index >= to) {
+            break;
+        }
+        std::stringstream linestream(line);
+        size_t partition;
+        linestream >> partition; 
+        partitioning.push_back(partition);
+        if (linestream.bad()) {
+            throw std::runtime_error("Failed to read partition");
+        }
+        line_index++;
+    }
+    return partitioning;
+}
+
 #ifdef GRAPH_IO_USE_KAGEN
 IOResult gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID size) {
     GeneratorParameters conf = conf_;
