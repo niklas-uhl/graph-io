@@ -414,7 +414,7 @@ std::vector<size_t> read_local_partition(const std::string& input, NodeId from, 
         }
         std::stringstream linestream(line);
         size_t partition;
-        linestream >> partition; 
+        linestream >> partition;
         partitioning.push_back(partition);
         if (linestream.bad()) {
             throw std::runtime_error("Failed to read partition");
@@ -474,7 +474,7 @@ IOResult gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID size)
         edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else if (conf.generator == "rmat") {
-      auto [edge_list_, vertex_range_] = gen.GenerateRMAT(n, m, conf.a, conf.b, conf.c);
+        auto [edge_list_, vertex_range_] = gen.GenerateRMAT(n, m, conf.a, conf.b, conf.c);
         edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
     } else {
@@ -574,7 +574,7 @@ IOResult read_graph_view(const std::string& input, PEID rank, PEID size) {
     std::vector<std::pair<size_t, size_t>> local_sizes;
     in_file.read_collective(local_sizes, size);
     auto local_size = local_sizes[rank];
-    exclusive_scan(local_sizes.begin(), local_sizes.end(), local_sizes.begin(), std::make_pair(0, 0),
+    exclusive_scan(local_sizes.begin(), local_sizes.end(), local_sizes.begin(), std::make_pair(size_t{0}, size_t{0}),
                    [](auto& lhs, auto& rhs) { return std::make_pair(lhs.first + rhs.first, lhs.second + rhs.second); });
     size_t offset = size * 2 * sizeof(size_t);
     offset += local_sizes[rank].first * sizeof(LocalGraphView::NodeInfo);

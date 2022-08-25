@@ -33,7 +33,7 @@ Graph read_graph(const std::string& input, InputFormat format) {
         for (const auto& edge : edges) {
             G.first_out_[edge.tail]++;
         }
-        std::exclusive_scan(G.first_out_.begin(), G.first_out_.end(), G.first_out_.begin(), 0);
+        std::exclusive_scan(G.first_out_.begin(), G.first_out_.end(), G.first_out_.begin(), EdgeId{0});
         G.head_.resize(edges.size());
         for (const auto& edge : edges) {
             auto& pos = G.first_out_[edge.tail];
