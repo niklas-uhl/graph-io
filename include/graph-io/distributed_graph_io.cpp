@@ -441,7 +441,7 @@ IOResult gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID size)
     }
     gen.SetSeed(conf.seed);
     kagen::EdgeList edge_list;
-    if (conf.generator == "gnm_undirected") {
+    if (conf.generator == "gnm") {
         auto [edge_list_, vertex_range_] = gen.GenerateUndirectedGNM(n, m, false);
         edge_list = std::move(edge_list_);
         vertex_range = std::move(vertex_range_);
