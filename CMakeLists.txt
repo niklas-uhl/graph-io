@@ -3,6 +3,7 @@ project(graph-io LANGUAGES CXX)
 
 option(GRAPH_IO_PARALLEL "Build parallel graph-io library" ON)
 option(GRAPH_IO_GENERATORS "Build with graph generators" ON)
+option(GRAPH_IO_MMAP "memory map binary files" ON)
 
 if (GRAPH_IO_PARALLEL)
   find_package(MPI)
@@ -36,6 +37,9 @@ if (GRAPH_IO_PARALLEL)
     target_link_libraries(graph-io PRIVATE KaGen::KaGen)
     endif()
   target_link_libraries(graph-io PUBLIC MPI::MPI_CXX)
+endif()
+if (GRAPH_IO_MMAP)
+  target_compile_definitions(graph-io PRIVATE GRAPH_IO_MMAP)
 endif()
 target_compile_options(graph-io PRIVATE -std=c++17)
 

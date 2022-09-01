@@ -317,19 +317,23 @@ LocalGraphView read_local_binary_graph(const std::string& input, const GraphInfo
         throw std::runtime_error("File " + head_path.string() + " does not exist.");
     }
 
-    size_t first_index = graph_info.local_from * sizeof(EdgeId);
     std::vector<EdgeId> first_out;
+    std::vector<NodeId> head;
+#if !defined(GRAPH_IO_MMAP)
+    size_t first_index = graph_info.local_from * sizeof(EdgeId);
     {
         ConcurrentFile first_out_file(first_out_path.string(), ConcurrentFile::AccessMode::ReadOnly, MPI_COMM_WORLD);
         first_out_file.read(first_out, graph_info.local_node_count() + 1, first_index);
     }
-    std::vector<NodeId> head;
     size_t to_read = first_out[graph_info.local_node_count()] - first_out[0];
     first_index = first_out[0] * sizeof(NodeId);
     {
         ConcurrentFile head_file(head_path.string(), ConcurrentFile::AccessMode::ReadOnly, MPI_COMM_WORLD);
         head_file.read(head, to_read, first_index);
     }
+#else
+    internal::read_binary<false>(input, first_out, head, graph_info.local_node_count());
+#endif
     std::vector<std::pair<NodeId, NodeId>> ranges(size);
     gather_PE_ranges(graph_info.local_from, graph_info.local_to, ranges, MPI_COMM_WORLD);
 

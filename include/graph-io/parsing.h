@@ -12,6 +12,12 @@
 #ifdef MPI_VERSION
 #include "graph-io/mpi_io_wrapper.h"
 #endif
+#if defined(GRAPH_IO_MMAP)
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 namespace graphio {
 namespace internal {
@@ -146,6 +152,7 @@ inline void read_binary(const std::string& input,
         static_assert(!use_mpi_io, "MPI not enabled");
 #endif
     } else {
+#if !defined(GRAPH_IO_MMAP)
         std::ifstream first_out_file(first_out_path, std::ios::binary);
         first_out_file.seekg(0, std::ios::end);
         size_t file_size = first_out_file.tellg();
@@ -155,6 +162,26 @@ inline void read_binary(const std::string& input,
         size_t bytes_to_read = first_out.size() * sizeof(EdgeId);
         first_out_file.seekg(first_index, std::ios::beg);
         first_out_file.read(reinterpret_cast<char*>(first_out.data()), bytes_to_read);
+#else
+        int fd = open(first_out_path.c_str(), O_RDONLY);
+        if (fd < 0) {
+            throw std::runtime_error("Failed to open " + first_out_path.string());
+        };
+        struct stat file_info;
+        fstat(fd, &file_info);
+        size_t file_size = static_cast<size_t>(file_info.st_size);
+        void* ptr = mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        NodeId total_node_count = file_size / sizeof(EdgeId) - 1;
+        NodeId nodes_to_read = std::min(node_count, total_node_count - first_index);
+        first_out.resize(nodes_to_read + 1);
+        if (ptr == MAP_FAILED) {
+            close(fd);
+            throw std::runtime_error("Failed to map file " + first_out_path.string());
+        }
+        std::copy_n(static_cast<EdgeId*>(ptr) + first_node, nodes_to_read + 1, first_out.begin());
+        munmap(ptr, file_size);
+        close(fd);
+#endif
     }
     size_t to_read = first_out[first_out.size() - 1] - first_out[0];
     first_index = first_out[0] * sizeof(NodeId);
@@ -165,10 +192,28 @@ inline void read_binary(const std::string& input,
 #endif
     } else {
         head.resize(to_read);
+#if !defined(GRAPH_IO_MMAP)
         std::ifstream head_file(head_path, std::ios::binary);
         size_t bytes_to_read = head.size() * sizeof(NodeId);
         head_file.seekg(first_index, std::ios::beg);
         head_file.read(reinterpret_cast<char*>(head.data()), bytes_to_read);
+#else
+        int fd = open(head_path.c_str(), O_RDONLY);
+        if (fd < 0) {
+            throw std::runtime_error("Failed to open " + head_path.string());
+        };
+        struct stat file_info;
+        fstat(fd, &file_info);
+        size_t file_size = static_cast<size_t>(file_info.st_size);
+        void* ptr = mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (ptr == MAP_FAILED) {
+            close(fd);
+            throw std::runtime_error("Failed to map file " + first_out_path.string());
+        }
+        std::copy_n(static_cast<EdgeId*>(ptr) + first_out[0], head.size(), head.begin());
+        munmap(ptr, file_size);
+        close(fd);
+#endif
     }
 }
 }  // namespace internal
