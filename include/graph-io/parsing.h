@@ -146,7 +146,7 @@ inline void read_binary(const std::string& input,
         ConcurrentFile first_out_file(first_out_path.string(), ConcurrentFile::AccessMode::ReadOnly, MPI_COMM_WORLD);
         size_t file_size = first_out_file.size();
         NodeId total_node_count = file_size / sizeof(EdgeId) - 1;
-        NodeId nodes_to_read = std::min(node_count, total_node_count - first_index);
+        NodeId nodes_to_read = std::min(node_count, total_node_count);
         first_out_file.read(first_out, nodes_to_read, first_index);
 #else
         static_assert(!use_mpi_io, "MPI not enabled");
@@ -157,7 +157,7 @@ inline void read_binary(const std::string& input,
         first_out_file.seekg(0, std::ios::end);
         size_t file_size = first_out_file.tellg();
         NodeId total_node_count = file_size / sizeof(EdgeId) - 1;
-        NodeId nodes_to_read = std::min(node_count, total_node_count - first_index);
+        NodeId nodes_to_read = std::min(node_count, total_node_count);
         first_out.resize(nodes_to_read + 1);
         size_t bytes_to_read = first_out.size() * sizeof(EdgeId);
         first_out_file.seekg(first_index, std::ios::beg);
@@ -172,7 +172,7 @@ inline void read_binary(const std::string& input,
         size_t file_size = static_cast<size_t>(file_info.st_size);
         void* ptr = mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
         NodeId total_node_count = file_size / sizeof(EdgeId) - 1;
-        NodeId nodes_to_read = std::min(node_count, total_node_count - first_index);
+        NodeId nodes_to_read = std::min(node_count, total_node_count);
         first_out.resize(nodes_to_read + 1);
         if (ptr == MAP_FAILED) {
             close(fd);
@@ -210,7 +210,7 @@ inline void read_binary(const std::string& input,
             close(fd);
             throw std::runtime_error("Failed to map file " + first_out_path.string());
         }
-        std::copy_n(static_cast<EdgeId*>(ptr) + first_out[0], head.size(), head.begin());
+        std::copy_n(static_cast<NodeId*>(ptr) + first_out[0], head.size(), head.begin());
         munmap(ptr, file_size);
         close(fd);
 #endif

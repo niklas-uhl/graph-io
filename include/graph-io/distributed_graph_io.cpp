@@ -332,7 +332,7 @@ LocalGraphView read_local_binary_graph(const std::string& input, const GraphInfo
         head_file.read(head, to_read, first_index);
     }
 #else
-    internal::read_binary<false>(input, first_out, head, graph_info.local_node_count());
+    internal::read_binary<false>(input, first_out, head, graph_info.local_from, graph_info.local_node_count());
 #endif
     std::vector<std::pair<NodeId, NodeId>> ranges(size);
     gather_PE_ranges(graph_info.local_from, graph_info.local_to, ranges, MPI_COMM_WORLD);
