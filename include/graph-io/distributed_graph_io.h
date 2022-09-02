@@ -80,7 +80,11 @@ std::vector<size_t> read_local_partition(const std::string& input, NodeId from, 
 IOResult gen_local_graph(const GeneratorParameters& conf, PEID rank, PEID size);
 #endif
 
-IOResult read_local_graph(const std::string& input, InputFormat format, PEID rank, PEID size);
+IOResult read_local_graph(const std::string& input,
+                          InputFormat format,
+                          PEID rank,
+                          PEID size,
+                          bool degree_partitioned = false);
 
 void write_graph_view(const LocalGraphView& G, const std::string& output, PEID rank, PEID size);
 

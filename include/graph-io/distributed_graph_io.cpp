@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <unordered_set>
 #include <utility>
+#include "distributed_graph_io.h"
 #include "graph-io/graph_definitions.h"
 #include "graph-io/local_graph_view.h"
 #include "graph-io/mpi_io_wrapper.h"
@@ -23,6 +24,8 @@
 #pragma pop_macro("PTR")
 #include "graph-io/mpi_io_wrapper.h"
 #endif
+#include <fcntl.h>
+#include <sys/mman.h>
 
 namespace graphio {
 
@@ -99,6 +102,109 @@ void fix_broken_edge_list(EdgeList& edge_list,
     // kagen sometimes produces duplicate edges
     auto it = std::unique(edge_list.begin(), edge_list.end());
     edge_list.erase(it, edge_list.end());
+}
+
+GraphInfo get_even_edge_distribution(const std::string& input, InputFormat format, PEID rank, PEID size) {
+    NodeId total_node_count;
+    EdgeId total_edge_count;
+    GraphInfo info;
+    if (format == InputFormat::metis) {
+        if (rank == 0) {
+            internal::read_metis_header(input, total_node_count, total_edge_count);
+            total_edge_count *= 2;
+            EdgeId edges_per_rank = (total_edge_count + size - 1) / size;
+            std::vector<NodeId> first_node(size + 1);
+            size_t running_sum = 0;
+            PEID current_pe = -1;  // at the moment we are assigning tasks to this PE
+            internal::read_metis(
+                input, [](auto, auto) {},
+                [&](NodeId node) {
+                    PEID target_pe = running_sum / edges_per_rank;
+                    while (current_pe < target_pe) {
+                        current_pe++;
+                        first_node[current_pe] = node;
+                    }
+                },
+                [&](Edge<> edge) { running_sum++; });
+            // some PEs might not get a vertices, fix them
+            while (current_pe < size) {
+                current_pe++;
+                first_node[current_pe] = total_node_count;
+            }
+            MPI_Scatter(first_node.data() + 1, 1, GRAPH_IO_MPI_NODE, &info.local_to, 1, GRAPH_IO_MPI_NODE, 0,
+                        MPI_COMM_WORLD);
+        } else {
+            MPI_Scatter(nullptr, 1, GRAPH_IO_MPI_NODE, &info.local_to, 1, GRAPH_IO_MPI_NODE, 0, MPI_COMM_WORLD);
+        }
+        PEID dest = rank < size - 1 ? rank + 1 : MPI_PROC_NULL;
+        PEID source = rank == 0 ? MPI_PROC_NULL : rank - 1;
+        MPI_Sendrecv(&info.local_to, 1, GRAPH_IO_MPI_NODE, dest, 0, &info.local_from, 1, GRAPH_IO_MPI_NODE, source, 0,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        if (rank == 0) {
+            info.local_from = 0;
+        }
+    } else if (format == InputFormat::binary) {
+        internal::read_graph_info_from_binary(input, total_node_count, total_edge_count);
+        NodeId nodes_per_rank = (total_node_count + size - 1) / size;
+        EdgeId edges_per_rank = (total_edge_count + size - 1) / size;
+        auto input_path = std::filesystem::path(input);
+        auto basename = input_path.stem();
+        auto path = input_path.parent_path();
+        auto first_out_path = path / (basename.string() + ".first_out");
+        int fd = open(first_out_path.c_str(), O_RDONLY);
+        if (fd < 0) {
+            throw std::runtime_error("Failed to open " + first_out_path.string());
+        };
+        void* ptr = mmap(NULL, (total_node_count + 1) * sizeof(EdgeId), PROT_READ, MAP_PRIVATE, fd, 0);
+        if (ptr == MAP_FAILED) {
+            close(fd);
+            throw std::runtime_error("Failed to map file " + first_out_path.string());
+        }
+        EdgeId* running_sum = static_cast<EdgeId*>(ptr) + rank * nodes_per_rank;
+        EdgeId* running_sum_end = std::min(running_sum + nodes_per_rank, static_cast<EdgeId*>(ptr) + total_node_count);
+        running_sum = std::min(running_sum, running_sum_end);
+        std::vector<std::pair<PEID, NodeId>> first_node;
+        PEID current_pe = rank == 0 ? -1 : *(running_sum - 1) / edges_per_rank;
+        for (; running_sum < running_sum_end; running_sum++) {
+            NodeId node = running_sum - static_cast<EdgeId*>(ptr);
+            PEID target_pe = *running_sum / edges_per_rank;
+            while (current_pe < target_pe) {
+                current_pe++;
+                first_node.emplace_back(current_pe, node);
+            }
+        }
+        munmap(ptr, (total_node_count + 1) * sizeof(EdgeId));
+        close(fd);
+        if (rank == size - 1) {
+            while (current_pe < size - 1) {
+                current_pe++;
+                first_node.emplace_back(current_pe, total_node_count);
+            }
+        }
+        std::vector<MPI_Request> req(first_node.size());
+        for (size_t i = 0; i < first_node.size(); i++) {
+            MPI_Issend(&first_node[i].second, 1, GRAPH_IO_MPI_NODE, first_node[i].first, 0, MPI_COMM_WORLD,
+                       req.data() + i);
+        }
+        // if (rank != 0) {
+        MPI_Recv(&info.local_from, 1, GRAPH_IO_MPI_NODE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD,
+                 MPI_STATUS_IGNORE);
+        // } else {
+        // info.local_from = 0;
+        // }
+        MPI_Waitall(req.size(), req.data(), MPI_STATUSES_IGNORE);
+        MPI_Barrier(MPI_COMM_WORLD);
+        PEID dest = rank == 0 ? MPI_PROC_NULL : rank - 1;
+        PEID source = rank < size - 1 ? rank + 1 : MPI_PROC_NULL;
+        MPI_Sendrecv(&info.local_from, 1, GRAPH_IO_MPI_NODE, dest, 0, &info.local_to, 1, GRAPH_IO_MPI_NODE, source, 0,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        if (rank == size - 1) {
+            info.local_to = total_node_count;
+        }
+    } else {
+        throw std::runtime_error("Unsupported format");
+    }
+    return info;
 }
 
 void read_metis_distributed(const std::string& input,
@@ -530,18 +636,27 @@ IOResult gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID size)
 }
 #endif
 
-IOResult read_local_graph(const std::string& input, InputFormat format, PEID rank, PEID size) {
+IOResult read_local_graph(const std::string& input,
+                          InputFormat format,
+                          PEID rank,
+                          PEID size,
+                          bool degree_partitioned) {
     NodeId total_node_count;
     EdgeId total_edge_count;
     if (format == InputFormat::metis) {
         internal::read_metis_header(input, total_node_count, total_edge_count);
+        total_edge_count *= 2;
     } else if (format == InputFormat::binary) {
         internal::read_graph_info_from_binary(input, total_node_count, total_edge_count);
     } else {
         throw std::runtime_error("Unsupported format");
     }
-
-    internal::GraphInfo graph_info = internal::GraphInfo::even_distribution(total_node_count, rank, size);
+    internal::GraphInfo graph_info;
+    if (degree_partitioned) {
+        graph_info = internal::get_even_edge_distribution(input, format, rank, size);
+    } else {
+        graph_info = internal::GraphInfo::even_distribution(total_node_count, rank, size);
+    }
 
     // atomic_debug("[" + std::to_string(graph_info.local_from) + ", " + std::to_string(graph_info.local_to) + ")");
     if (format == InputFormat::metis) {
