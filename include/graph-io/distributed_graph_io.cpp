@@ -18,10 +18,7 @@
 #include "graph-io/mpi_io_wrapper.h"
 #include "graph-io/parsing.h"
 #ifdef GRAPH_IO_USE_KAGEN
-#pragma push_macro("PTR")
-#undef PTR
-#include "kagen_library.h"
-#pragma pop_macro("PTR")
+#include <kagen.h>
 #include "graph-io/mpi_io_wrapper.h"
 #endif
 #include <fcntl.h>
