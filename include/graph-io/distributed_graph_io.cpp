@@ -167,7 +167,9 @@ GraphInfo get_even_edge_distribution(const std::string& input, InputFormat forma
             PEID target_pe = *running_sum / edges_per_rank;
             while (current_pe < target_pe) {
                 current_pe++;
-                first_node.emplace_back(current_pe, node);
+                if (current_pe < size) {
+                    first_node.emplace_back(current_pe, node);
+                }
             }
         }
         munmap(ptr, (total_node_count + 1) * sizeof(EdgeId));
@@ -175,7 +177,9 @@ GraphInfo get_even_edge_distribution(const std::string& input, InputFormat forma
         if (rank == size - 1) {
             while (current_pe < size - 1) {
                 current_pe++;
-                first_node.emplace_back(current_pe, total_node_count);
+                if (current_pe < size) {
+                    first_node.emplace_back(current_pe, total_node_count);
+                }
             }
         }
         std::vector<MPI_Request> req(first_node.size());
