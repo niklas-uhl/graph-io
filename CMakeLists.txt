@@ -17,7 +17,18 @@ if (GRAPH_IO_PARALLEL)
       set(KAGEN_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
       set(KAGEN_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
       set(KAGEN_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-      add_subdirectory(extern/kagen EXCLUDE_FROM_ALL)
+      include(FetchContent)
+      FetchContent_Declare(
+        KaGen
+        GIT_REPOSITORY https://github.com/sebalamm/KaGen
+        GIT_TAG        v1.3.0
+        GIT_SUBMODULES_RECURSE TRUE
+      )
+      FetchContent_GetProperties(KaGen)
+      if (NOT kagen_POPULATED)
+        FetchContent_Populate(KaGen)
+        add_subdirectory(${kagen_SOURCE_DIR} ${kagen_BINARY_DIR} EXCLUDE_FROM_ALL)
+      endif()
     endif()
   endif()
 endif()
