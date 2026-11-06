@@ -538,8 +538,6 @@ std::vector<size_t> read_local_partition(const std::string& input, NodeId from, 
 #ifdef GRAPH_IO_USE_KAGEN
 IOResult gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID size) {
     GeneratorParameters conf = conf_;
-    kagen::VertexRange vertex_range;
-
     kagen::SInt n = static_cast<kagen::SInt>(1) << conf.n;
     kagen::SInt m = static_cast<kagen::SInt>(1) << conf.m;
 
@@ -551,46 +549,30 @@ IOResult gen_local_graph(const GeneratorParameters& conf_, PEID rank, PEID size)
         gen.EnableBasicStatistics();
     }
     gen.SetSeed(conf.seed);
-    kagen::EdgeList edge_list;
+    kagen::Graph graph;
     if (conf.generator == "gnm") {
-        auto [edge_list_, vertex_range_] = gen.GenerateUndirectedGNM(n, m, false);
-        edge_list = std::move(edge_list_);
-        vertex_range = std::move(vertex_range_);
+        graph = gen.GenerateUndirectedGNM(n, m, false);
     } else if (conf.generator == "rdg_2d") {
-        auto [edge_list_, vertex_range_] = gen.GenerateRDG2D(n, false);
-        edge_list = std::move(edge_list_);
-        vertex_range = std::move(vertex_range_);
+        graph = gen.GenerateRDG2D(n, false);
     } else if (conf.generator == "rdg_3d") {
-        auto [edge_list_, vertex_range_] = gen.GenerateRDG3D(n);
-        edge_list = std::move(edge_list_);
-        vertex_range = std::move(vertex_range_);
+        graph = gen.GenerateRDG3D(n);
     } else if (conf.generator == "rgg_2d") {
-        auto [edge_list_, vertex_range_] = gen.GenerateRGG2D_NM(n, m);
-        edge_list = std::move(edge_list_);
-        vertex_range = std::move(vertex_range_);
+        graph = gen.GenerateRGG2D_NM(n, m);
     } else if (conf.generator == "rgg_3d") {
-        auto [edge_list_, vertex_range_] = gen.GenerateRGG3D_NM(n, m);
-        edge_list = std::move(edge_list_);
-        vertex_range = std::move(vertex_range_);
+        graph = gen.GenerateRGG3D_NM(n, m);
     } else if (conf.generator == "rhg") {
-        auto [edge_list_, vertex_range_] = gen.GenerateRHG_NM(conf.gamma, n, m);
-        edge_list = std::move(edge_list_);
-        vertex_range = std::move(vertex_range_);
+        graph = gen.GenerateRHG_NM(conf.gamma, n, m);
     } else if (conf.generator == "ba") {
-        auto [edge_list_, vertex_range_] = gen.GenerateBA(n, conf.d);
-        edge_list = std::move(edge_list_);
-        vertex_range = std::move(vertex_range_);
+        graph = gen.GenerateBA(n, conf.d);
     } else if (conf.generator == "grid_2d") {
-        auto [edge_list_, vertex_range_] = gen.GenerateGrid2D_N(n, conf.p);
-        edge_list = std::move(edge_list_);
-        vertex_range = std::move(vertex_range_);
+        graph = gen.GenerateGrid2D_N(n, conf.p);
     } else if (conf.generator == "rmat") {
-        auto [edge_list_, vertex_range_] = gen.GenerateRMAT(n, m, conf.a, conf.b, conf.c);
-        edge_list = std::move(edge_list_);
-        vertex_range = std::move(vertex_range_);
+        graph = gen.GenerateRMAT(n, m, conf.a, conf.b, conf.c);
     } else {
         throw std::runtime_error("Generator not supported");
     }
+    kagen::VertexRange vertex_range = graph.vertex_range;
+    kagen::Edgelist edge_list = std::move(graph.edges);
     NodeId local_from = vertex_range.first;
     NodeId local_to = vertex_range.second;
     NodeId local_node_count = local_to - local_from;
